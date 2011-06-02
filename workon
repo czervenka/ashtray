@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Simple replacement for virtualenv-wrapper
+# Works perfectly with rvirtualenv and zsh
+#
+
+[ -z "$RVIRTUALENV_DIR" ] && RVIRTUALENV_DIR="$HOME/data/.rvirts"
+
+VENV_BINARY="$HOME/bin/rvirtualenv/rvirtualenv.py"
+
+# activates virtual environment
+workon() {
+    . $RVIRTUALENV_DIR/$1/bin/activate
+
+}
+
+# creates new virtual environment
+# use: workon <some_name>
+# for other options 
+mkvirt() {
+    projname="$1"
+    shift
+    $VENV_BINARY "$RVIRTUALENV_DIR/$projname" "$@"
+}
+
+# zsh autocompletion
+_workon_cpl() {
+    reply=(`ls "$RVIRTUALENV_DIR"`)
+}
+
+compctl -K _workon_cpl workon
