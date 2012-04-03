@@ -4,23 +4,98 @@
 # Works perfectly with rvirtualenv and zsh
 #
 
-[ -z "$RVIRTUALENV_DIR" ] && RVIRTUALENV_DIR="$HOME/data/.rvirts"
+# default settings
+[ -z $RVIRTUALENV_DIR ] && RVIRTUALENV_DIR="$HOME/data/.rvirts"
+[ -z $VENV_BINARY ] && VENV_BINARY="$HOME/bin/apps/rvirtualenv/rvirtualenv.py"
+[ -z $DEFAULT_PYTHON ] && DEFAULT_PYTHON="2.7"
 
-VENV_BINARY="$HOME/bin/rvirtualenv/rvirtualenv.py"
-
-# activates virtual environment
+# activates virtualenv
 workon() {
+    if [ -z "$1" ]; then
+        echo "USAGE: workon <project_name>"
+        return 1
+    fi
+    venv_dir="$RVIRTUALENV_DIR/$1"
+    if [ ! -d "$venv_dir" ]; then
+        echo "'$venv_dir' does not exist."
+        return 1
+    fi
+    if [ ! -f "$venv_dir/bin/activate" ]; then
+        echo "'$venv_dir' is not valid rvirtualenv environment."
+        return 1
+    fi
     . $RVIRTUALENV_DIR/$1/bin/activate
-
+    rehash
 }
 
 # creates new virtual environment
 # use: workon <some_name>
 # for other options 
 mkvirt() {
+    err=
     projname="$1"
-    shift
-    $VENV_BINARY "$RVIRTUALENV_DIR/$projname" "$@"
+    if [ ! -z $projname ]; then
+        shift; 
+    fi
+    if [ ! -z $1 ]; then
+        python="$1"
+        shift
+    fi
+
+    [ -z $python ] && python=$DEFAULT_PYTHON
+
+    "$VENV_BINARY" "$RVIRTUALENV_DIR/$projname" --python=python$python "$@"
+    workon "$projname"
+    rehash
+    easy_install-$python pip
+    # finally refresh
+    workon "$projname"
+    rehash
+}
+
+# removes existing virtualenv
+rmvirt() {
+    projname="$1"
+    [ ! -d "$RVIRTUALENV_DIR/$projname" ] && echo "'$projname' is not valid rvirtualenv environment." && return 1
+    echo "Remove $projname?"
+    if [ "`basename $VIRTUAL_ENV`" = "$projname" ]; then
+        deactivate
+    fi
+    rm -rI "$RVIRTUALENV_DIR/$projname"
+}
+
+
+# adds some handy aliases to virtualenv activate binary
+virt_enrich() {
+    projname="$1"
+    project_dir="$2"
+
+    if [ -z $project_dir ]; then
+        echo "USAGE: virt_enrich <project_name> <project_dir>"
+        print "       use '-' for no project dir."
+        return 1
+    fi
+
+    if [ "$project_dir" = "-" ]; then
+        project_dir=$HOME
+    fi
+    if [ ! -d "$project_dir" ]; then
+        echo "Project dir '$project_dir' does not exist."
+        return
+    fi
+    # get absolute path of `project_dir`
+    project_dir=`cd "$project_dir"; pwd; cd - > /dev/null`
+    if [ ! -d "$RVIRTUALENV_DIR/$projname" ]; then
+        echo "Looks like '$projname' is not existing virtualenv dir."
+    fi
+
+    cat >> "$RVIRTUALENV_DIR/$projname/bin/activate" <<EOF
+    export PROJECT_ROOT="$project_dir"
+    alias m="$PROJECT_ROOT/manage.py"
+    alias r="m runserver 9001"
+    alias cdp="cd $PROJECT_ROOT"
+EOF
+    echo "Done"
 }
 
 # zsh autocompletion
@@ -29,3 +104,5 @@ _workon_cpl() {
 }
 
 compctl -K _workon_cpl workon
+compctl -K _workon_cpl rmvirt
+compctl -K _workon_cpl virt_enrich
